@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>爆走100歳！森の黄金ドングリ大作戦</title>
+<style>
+  body {
+    margin: 0;
+    background: #111;
+    color: #fff;
+    font-family: 'Hiragino Sans', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    user-select: none;
+  }
+  #game-container {
+    position: relative;
+    width: 360px;
+    height: 600px;
+    background: #2d4c1e;
+    border: 4px solid #8b5a2b;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+  }
+  canvas { display: block; }
+  .ui-panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.75);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 2px solid #ffd700;
+    text-align: center;
+    pointer-events: none;
+  }
+  .score-title { color: #ffd700; font-size: 13px; font-weight: bold; }
+  .score-num { font-size: 20px; font-weight: bold; color: #fff; }
+  .controls {
+    margin-top: 15px;
+    display: flex;
+    gap: 12px;
+  }
+  button {
+    padding: 12px 20px;
+    font-size: 16px;
+    font-weight: bold;
+    background: #8b5a2b;
+    color: #fff;
+    border: 2px solid #ffd700;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:active { background: #ffd700; color: #000; }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <div class="ui-panel">
+    <div class="score-title">✨ 黄金ドングリ収集数 ✨</div>
+    <div id="acorn-count" class="score-num">0 個</div>
+    <div style="font-size: 11px; color: #aaa; margin-top: 2px;">最高記録: <span id="high-score">0</span> 個</div>
+  </div>
+  <canvas id="gameCanvas" width="360" height="600"></canvas>
+</div>
+
+<div class="controls">
+  <button onclick="moveLeft()">◀ 左</button>
+  <button onclick="jump()">▲ ジャンプ</button>
+  <button onclick="moveRight()">右 ▶</button>
+</div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // レーン設定
+  let lane = 1; // 0:左, 1:中, 2:右
+  const laneX = [70, 180, 290];
+  const playerY = 480;
+
+  // プレイヤー状態
+  let isJumping = false;
+  let jumpTimer = 0;
+  let acornsCollected = 0;
+  let highScore = localStorage.getItem('boar_high_score') || 0;
+  document.getElementById('high-score').textContent = highScore;
+
+  let speed = 4;
+  let isGameOver = false;
+
+  // 出現オブジェクト
+  let objects = []; 
+
+  function spawnObject() {
+    if (isGameOver) return;
+    const spawnLane = Math.floor(Math.random() * 3);
+    const isAcorn = Math.random() > 0.35; // 65%でドングリ、35%で障害物
+    objects.push({
+      lane: spawnLane,
+      y: -40,
+      type: isAcorn ? 'acorn' : 'obstacle'
+    });
+  }
+
+  setInterval(spawnObject, 750);
+
+  // 操作関数
+  function moveLeft() { if (lane > 0 && !isGameOver) lane--; }
+  function moveRight() { if (lane < 2 && !isGameOver) lane++; }
+  function jump() {
+    if (!isJumping && !isGameOver) {
+      isJumping = true;
+      jumpTimer = 22;
+    }
+  }
+
+  // キーボード操作対応
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') moveLeft();
+    if (e.key === 'ArrowRight' || e.key === 'd') moveRight();
+    if (e.key === 'ArrowUp' || e.key === ' ') jump();
+  });
+
+  // 更新処理
+  function update() {
+    if (isGameOver) return;
+
+    if (isJumping) {
+      jumpTimer--;
+      if (jumpTimer <= 0) isJumping = false;
+    }
+
+    for (let i = objects.length - 1; i >= 0; i--) {
+      let obj = objects[i];
+      obj.y += speed;
+
+      // 当たり判定
+      if (obj.y > playerY - 30 && obj.y < playerY + 30 && obj.lane === lane) {
+        if (obj.type === 'acorn') {
+          acornsCollected += 10;
+          document.getElementById('acorn-count').textContent = acornsCollected + ' 個';
+          objects.splice(i, 1);
+          continue;
+        } else if (obj.type === 'obstacle' && !isJumping) {
+          endGame();
+        }
+      }
+
+      if (obj.y > 650) objects.splice(i, 1);
+    }
+
+    speed += 0.0008; // 段階的なスピードアップ
+  }
+
+  function endGame() {
+    isGameOver = true;
+    if (acornsCollected > highScore) {
+      highScore = acornsCollected;
+      localStorage.setItem('boar_high_score', highScore);
+      document.getElementById('high-score').textContent = highScore;
+    }
+  }
+
+  // 描画処理
+  function render() {
+    // 背景（森の道）
+    ctx.fillStyle = '#2d4c1e';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 3レーンの境界線
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([15, 12]);
+    ctx.beginPath();
+    ctx.moveTo(125, 0); ctx.lineTo(125, 600);
+    ctx.moveTo(235, 0); ctx.lineTo(235, 600);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // オブジェクト描画
+    objects.forEach(obj => {
+      const x = laneX[obj.lane];
+      ctx.textAlign = 'center';
+      if (obj.type === 'acorn') {
+        ctx.font = '28px serif';
+        ctx.fillText('🌰', x, obj.y);
+      } else {
+        ctx.font = '30px serif';
+        ctx.fillText('🪵', x, obj.y);
+      }
+    });
+
+    // プレイヤー（おばあちゃん＆ウリボ）
+    const px = laneX[lane];
+    const py = isJumping ? playerY - 35 : playerY;
+
+    if (isJumping) {
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.ellipse(px, playerY + 15, 18, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.font = '38px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('👵🐗', px, py);
+
+    // リザルト画面（警察押収演出）
+    if (isGameOver) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#ffd700';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('🚨 逮捕！スピード違反 🚨', canvas.width / 2, 230);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = '16px sans-serif';
+      ctx.fillText(`押収品：黄金ドングリ ${acornsCollected} 個`, canvas.width / 2, 290);
+
+      ctx.fillStyle = '#aaa';
+      ctx.font = '14px sans-serif';
+      ctx.fillText('画面タップで再爆走！', canvas.width / 2, 350);
+    }
+
+    requestAnimationFrame(() => {
+      update();
+      render();
+    });
+  }
+
+  canvas.addEventListener('click', () => {
+    if (isGameOver) {
+      isGameOver = false;
+      acornsCollected = 0;
+      speed = 4;
+      objects = [];
+      document.getElementById('acorn-count').textContent = '0 個';
+    }
+  });
+
+  render();
+</script>
+</body>
+</html>
+、
